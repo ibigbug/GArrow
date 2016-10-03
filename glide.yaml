@@ -1,0 +1,6 @@
+package: github.com/ibigbug/GArrow
+import:
+- package: gopkg.in/yaml.v2
+- package: github.com/ibigbug/conn-pool
+- package: github.com/Sirupsen/logrus
+  version: ~0.10.0
