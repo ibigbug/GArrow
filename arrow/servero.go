@@ -2,6 +2,7 @@ package arrow
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -81,6 +82,7 @@ func (s *Server) peekHeader(conn *ConnWithHeader) (host string, err error) {
 	header := make([]byte, size)
 	conn.Read(header)
 	host = string(header[:])
+	fmt.Println("host:", host, "size:", size)
 	return
 }
 
