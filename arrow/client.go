@@ -30,6 +30,7 @@ type ProxyHandler struct {
 }
 
 func (ph *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("new req:", r.Method, r.URL, r.Proto)
 	ph.preprocessHeader(r)
 	if r.Method == "CONNECT" {
 		ph.handleHTTPS(w, r)
@@ -45,14 +46,17 @@ func (ph *ProxyHandler) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// tell remote connection header info
+	// remoteAddr,
 	ph.writeConnHeader(rConn, r, w)
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
 		return
 	}
 	cConn, buf, err := hj.Hijack()
-	defer cConn.Close()
+
 	if err != nil {
 		fmt.Fprintln(w, "Error doing proxy hijack:", err)
 		return
@@ -85,6 +89,7 @@ func (ph *ProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ph.writeConnHeader(rConn, r, w)
+	fmt.Println("header sent")
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
@@ -112,6 +117,7 @@ func (ph *ProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		rConn.Write(remain)
 	}
+	fmt.Println("req header sent")
 	pipeWithTimeout(rConn, cConn)
 }
 
@@ -148,12 +154,19 @@ func (c *Client) Run() error {
 		c.logger.Errorln("Error resolving proxy server address: ", err)
 		os.Exit(1)
 	}
-	ph := &ProxyHandler{
+	h := &ProxyHandler{
 		tcpAddr: tcpAddr,
 	}
 
+	s := http.Server{
+		Handler: h,
+		ConnState: func(c net.Conn, s http.ConnState) {
+			fmt.Println("conn:", c.LocalAddr(), "<->", c.RemoteAddr(), "state:", s)
+		},
+	}
+	l, err := net.Listen("tcp", c.LocalAddress)
 	c.logger.Infoln("Running client at: ", c.LocalAddress)
-	return http.ListenAndServe(c.LocalAddress, ph)
+	return s.Serve(l)
 }
 
 func NewClient(c *Config) (s Runnable) {

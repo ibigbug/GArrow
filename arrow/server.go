@@ -8,11 +8,13 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/ibigbug/conn-pool/connpool"
 )
 
 type Server struct {
 	*Config
-	logger *logrus.Logger
+	logger   *logrus.Logger
+	connPool *connpool.ConnectionPool
 }
 
 func (s *Server) Run() (err error) {
@@ -43,33 +45,24 @@ func (s *Server) Run() (err error) {
 }
 
 func (s *Server) HandleConn(cConn *ConnWithHeader) {
-	var rConn *net.TCPConn
-	defer cConn.Close()
+	var rConn *connpool.ManagedConn
 
-	for {
-		if !cConn.headerPeeked {
-			// block wating header for next client request reuese this conn
-			rHost, err := s.peekHeader(cConn)
-			if err != nil {
-				s.logger.Errorln("Error reading header: ", err)
-				return
-			}
-			tcpAddr, err := net.ResolveTCPAddr("tcp", rHost)
-			if err != nil {
-				s.logger.Errorln("Error resolve remote addr: ", err)
-				return
-			}
-
-			// we close it manually
-			rConn, err = net.DialTCP("tcp", nil, tcpAddr)
-			if err != nil {
-				s.logger.Errorln("Error dialing to remote: ", err)
-				return
-			}
-			pipeWithTimeout(rConn, cConn)
-			rConn.Close()
-			cConn.headerPeeked = false
-		}
+	rHost, err := s.peekHeader(cConn)
+	fmt.Println("rHost got:", rHost)
+	if err != nil {
+		s.logger.Errorln("Error reading header: ", err)
+		return
+	}
+	rConn, err = s.connPool.Get(rHost)
+	if err != nil {
+		s.logger.Errorln("Error dialing to remote: ", err)
+		return
+	}
+	err = pipeWithTimeout(rConn, cConn)
+	if err == ErrIdle {
+		s.connPool.Put(rConn)
+	} else {
+		s.connPool.Remove(rConn)
 	}
 }
 
@@ -79,6 +72,10 @@ func (s *Server) peekHeader(conn *ConnWithHeader) (host string, err error) {
 	if err != nil {
 		return
 	}
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(size))
+	fmt.Println(string(b))
 	header := make([]byte, size)
 	conn.Read(header)
 	host = string(header[:])
@@ -92,9 +89,11 @@ func NewServer(c *Config) (s Runnable) {
 	logrus.SetOutput(os.Stderr)
 	logger := logrus.New()
 
+	connPool := connpool.NewPool()
 	s = &Server{
-		Config: c,
-		logger: logger,
+		Config:   c,
+		logger:   logger,
+		connPool: &connPool,
 	}
 	return
 }

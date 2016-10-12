@@ -1,12 +1,17 @@
 package arrow
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"time"
+)
+
+var (
+	ErrIdle = errors.New("Socket idle too long")
 )
 
 func checkError(err error) {
@@ -41,6 +46,7 @@ func makeConnChan(conn io.ReadWriter) (c chan []byte) {
 				if err != io.EOF {
 					log.Println("piping error:", err)
 				}
+				return
 			}
 		}
 	}()
@@ -48,13 +54,14 @@ func makeConnChan(conn io.ReadWriter) (c chan []byte) {
 	return
 }
 
-func pipeWithTimeout(rConn *net.TCPConn, cConn io.ReadWriter) {
+func pipeWithTimeout(rConn io.ReadWriter, cConn io.ReadWriter) error {
 
 	rChan := makeConnChan(rConn)
 	cChan := makeConnChan(cConn)
 
 	timeout := make(chan bool, 1)
-	t := time.NewTimer(10 * time.Second)
+	td := 5 * time.Second
+	t := time.NewTimer(td)
 	go func() {
 		<-t.C
 		timeout <- true
@@ -67,24 +74,21 @@ func pipeWithTimeout(rConn *net.TCPConn, cConn io.ReadWriter) {
 				<-t.C
 			}
 			if b1 == nil {
-				return
+				return io.ErrClosedPipe
 			}
 			cConn.Write(b1)
-			t.Reset(10 * time.Second)
+			t.Reset(td)
 		case b2 := <-cChan:
 			if !t.Stop() {
 				<-t.C
 			}
 			if b2 == nil {
-				return
+				return io.ErrClosedPipe
 			}
 			rConn.Write(b2)
-			t.Reset(10 * time.Second)
-
+			t.Reset(td)
 		case <-timeout:
-			close(rChan)
-			close(cChan)
-			break
+			return ErrIdle
 		}
 	}
 }
@@ -95,4 +99,10 @@ func ensurePort(s string) (h string) {
 		h = fmt.Sprintf("%s:80", s)
 	}
 	return
+}
+
+func isCloseRead(c net.Conn) bool {
+	b := make([]byte, 1)
+	_, err := c.Read(b)
+	return err == io.EOF
 }

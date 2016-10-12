@@ -1,10 +1,16 @@
 hash: 0f119ebe3a7a59d1e671121e5489021aa122933c28dab70891ddf85b1d518dcb
-updated: 2016-10-03T21:12:25.874419796+08:00
+updated: 2016-10-12T18:46:06.922893781+08:00
 imports:
 - name: github.com/ibigbug/conn-pool
-  version: 424890b45a2eba6b5aeb25990b9cf9805b6a3942
+  version: 330af9a0a6bec6ec60041f508aa74c8191c46104
+  subpackages:
+  - connpool
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: golang.org/x/sys
+  version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
+  subpackages:
+  - unix
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 testImports: []

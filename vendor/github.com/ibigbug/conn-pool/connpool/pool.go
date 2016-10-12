@@ -43,7 +43,7 @@ func (p *ConnectionPool) SetKeepAliveTimeout(to time.Duration) {
 
 // Get get a connection with specific remote address
 // could be domain:port/ip:port
-func (p ConnectionPool) Get(remoteAddr string) (conn *ManagedConn, err error) {
+func (p *ConnectionPool) Get(remoteAddr string) (conn *ManagedConn, err error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -72,15 +72,22 @@ func (p ConnectionPool) Get(remoteAddr string) (conn *ManagedConn, err error) {
 	return
 }
 
-// Release release to pool after used, and will be closed in `timeout` seconds
-func (p ConnectionPool) Release(conn *ManagedConn) {
-	debug("releasing conn %p, idle changed to 1\n", conn)
+// Remove the connection immediately
+func (p *ConnectionPool) Remove(conn *ManagedConn) {
+	debug("remove conn %p\n", conn)
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.remove(conn)
+}
+
+// Put release a conn back to pool, and will be removed in `timeout` seconds
+func (p *ConnectionPool) Put(conn *ManagedConn) {
+	debug("put back conn %p, idle changed to 1\n", conn)
 	atomic.StoreUint32(&conn.idle, 1)
 
 	go func() {
 		timer := time.NewTimer(p.timeout)
 		<-timer.C
-		remoteAddr := conn.RemoteAddr().String()
 
 		// Lock it
 		p.mutex.Lock()
@@ -90,20 +97,19 @@ func (p ConnectionPool) Release(conn *ManagedConn) {
 			debug("conn %p is reused, skipping release\n", conn)
 			return
 		}
-		debug("doing release %p(idle: %v), current conn pool: ", conn, conn.idle)
-		for _, c := range p.pool[remoteAddr] {
-			debug("%p, ", c)
-		}
-		debug("")
-		idx := findIdx(p.pool[remoteAddr], conn)
-
-		if idx == -1 {
-			// conn has already been released
-			return
-		}
-		p.pool[remoteAddr] = append(p.pool[remoteAddr][:idx], p.pool[remoteAddr][idx+1:]...)
-		conn.Close()
+		p.remove(conn)
 	}()
+}
+
+func (p *ConnectionPool) remove(conn *ManagedConn) {
+	remoteAddr := conn.RemoteAddr().String()
+	idx := findIdx(p.pool[remoteAddr], conn)
+	if idx == -1 {
+		// conn has already been released
+		return
+	}
+	p.pool[remoteAddr] = append(p.pool[remoteAddr][:idx], p.pool[remoteAddr][idx+1:]...)
+	conn.Close()
 }
 
 func (p ConnectionPool) createConn(tcpAddr *net.TCPAddr) (conn *ManagedConn) {
