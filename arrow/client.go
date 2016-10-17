@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/ibigbug/conn-pool/connpool"
 )
 
 var hopHeaders = []string{
@@ -26,70 +27,24 @@ var hopHeaders = []string{
 }
 
 type ProxyHandler struct {
-	tcpAddr *net.TCPAddr
+	serverAddr string
+	connPool   *connpool.ConnectionPool
 }
 
-func (ph *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("new req:", r.Method, r.URL, r.Proto)
-	ph.preprocessHeader(r)
+
 	if r.Method == "CONNECT" {
-		ph.handleHTTPS(w, r)
-	} else {
-		ph.handleHTTP(w, r)
+		h.preprocessHeader(r)
 	}
-}
 
-func (ph *ProxyHandler) handleHTTPS(w http.ResponseWriter, r *http.Request) {
-	rConn, err := net.DialTCP("tcp", nil, ph.tcpAddr)
+	rConn, err := h.connPool.Get(h.serverAddr)
 	if err != nil {
 		fmt.Fprintln(w, "Error connecting proxy server: ", err)
 		return
 	}
 
-	// tell remote connection header info
-	// remoteAddr,
-	ph.writeConnHeader(rConn, r, w)
-
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
-		return
-	}
-	cConn, buf, err := hj.Hijack()
-
-	if err != nil {
-		fmt.Fprintln(w, "Error doing proxy hijack:", err)
-		return
-	}
-
-	// WTF the difference between httputil.DumpRequest ?
-	req, err := httputil.DumpRequestOut(r, false)
-	if err != nil {
-		fmt.Fprintln(w, "Error doing proxy hijack:", err)
-	}
-	rConn.Write(req)
-	bs := buf.Reader.Buffered()
-	if bs > 0 {
-		remain := make([]byte, bs)
-		n, _ := buf.Read(remain)
-		if n != bs {
-			log.Fatalln(n, bs)
-		}
-		rConn.Write(remain)
-	}
-	cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
-	pipeWithTimeout(rConn, cConn)
-}
-
-func (ph *ProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	rConn, err := net.DialTCP("tcp", nil, ph.tcpAddr)
-	if err != nil {
-		fmt.Fprintln(w, "Error connecting proxy server: ", err)
-		return
-	}
-
-	ph.writeConnHeader(rConn, r, w)
-	fmt.Println("header sent")
+	h.writeConnHeader(rConn, r, w)
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
@@ -117,17 +72,30 @@ func (ph *ProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		rConn.Write(remain)
 	}
-	fmt.Println("req header sent")
+
+	if r.Method == "CONNECT" {
+		h.handleHTTPS(rConn, cConn)
+	} else {
+		h.handleHTTP(rConn, cConn)
+	}
+}
+
+func (h *ProxyHandler) handleHTTPS(rConn io.ReadWriter, cConn io.ReadWriter) {
+	cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
 	pipeWithTimeout(rConn, cConn)
 }
 
-func (ph *ProxyHandler) preprocessHeader(r *http.Request) {
+func (h *ProxyHandler) handleHTTP(rConn io.ReadWriter, cConn io.ReadWriter) {
+	pipeWithTimeout(rConn, cConn)
+}
+
+func (h *ProxyHandler) preprocessHeader(r *http.Request) {
 	for _, h := range hopHeaders {
 		r.Header.Del(h)
 	}
 }
 
-func (ph *ProxyHandler) writeConnHeader(rConn io.ReadWriter, r *http.Request, w http.ResponseWriter) {
+func (h *ProxyHandler) writeConnHeader(rConn io.ReadWriter, r *http.Request, w http.ResponseWriter) {
 	rHost := ensurePort(r.Host)
 	err := binary.Write(rConn, binary.LittleEndian, int64(len(rHost)))
 	fmt.Println("rHost:", rHost, "size:", len(rHost))
@@ -147,15 +115,11 @@ type Client struct {
 	logger *logrus.Logger
 }
 
-func (c *Client) Run() error {
-
-	tcpAddr, err := net.ResolveTCPAddr("tcp", c.ServerAddress)
-	if err != nil {
-		c.logger.Errorln("Error resolving proxy server address: ", err)
-		os.Exit(1)
-	}
+func (c *Client) Run() (err error) {
+	cp := connpool.NewPool()
 	h := &ProxyHandler{
-		tcpAddr: tcpAddr,
+		serverAddr: c.ServerAddress,
+		connPool:   &cp,
 	}
 
 	s := http.Server{

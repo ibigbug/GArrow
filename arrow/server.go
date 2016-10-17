@@ -53,17 +53,16 @@ func (s *Server) HandleConn(cConn *ConnWithHeader) {
 		s.logger.Errorln("Error reading header: ", err)
 		return
 	}
+
 	rConn, err = s.connPool.Get(rHost)
 	if err != nil {
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
-	err = pipeWithTimeout(rConn, cConn)
-	if err == ErrIdle {
-		s.connPool.Put(rConn)
-	} else {
-		s.connPool.Remove(rConn)
-	}
+
+	pipeWithTimeout(rConn, cConn)
+	s.connPool.Remove(rConn)
+
 }
 
 func (s *Server) peekHeader(conn *ConnWithHeader) (host string, err error) {
@@ -75,11 +74,9 @@ func (s *Server) peekHeader(conn *ConnWithHeader) (host string, err error) {
 
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(size))
-	fmt.Println(string(b))
 	header := make([]byte, size)
 	conn.Read(header)
 	host = string(header[:])
-	fmt.Println("host:", host, "size:", size)
 	return
 }
 
