@@ -1,6 +1,7 @@
 package connpool
 
 import (
+	"net"
 	"testing"
 	"time"
 )
@@ -26,7 +27,7 @@ func TestUseReleasedConnImmediately(t *testing.T) {
 		t.Error(1)
 	}
 
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(2)
 	}
 
@@ -44,9 +45,11 @@ func TestUseReleasedConnImmediately(t *testing.T) {
 	<-timer.C
 
 	// there should be nothing
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	if len(p.pool[A1]) != 0 {
+	mgr := p.pool[A1]
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	if len(mgr.conns) != 0 {
 		t.Error(3)
 	}
 }
@@ -61,7 +64,7 @@ func TestConnCache(t *testing.T) {
 		t.Error(1)
 	}
 
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(2)
 	}
 
@@ -75,7 +78,7 @@ func TestConnCache(t *testing.T) {
 		t.Error(4)
 	}
 
-	if len(p.pool[A1]) != 2 {
+	if len(p.pool[A1].conns) != 2 {
 		t.Error(5)
 	}
 
@@ -92,7 +95,7 @@ func TestConnCache(t *testing.T) {
 	<-t1.C
 
 	// conn1 should be kept
-	if len(p.pool[A1]) != 2 {
+	if len(p.pool[A1].conns) != 2 {
 		t.Error(7)
 	}
 
@@ -111,9 +114,10 @@ func TestConnCache(t *testing.T) {
 	timer := time.NewTimer(5 * time.Second)
 	<-timer.C
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	if len(p.pool[A1]) != 0 {
+	mgr := p.pool[A1]
+	mgr.Lock()
+	defer mgr.Unlock()
+	if len(mgr.conns) != 0 {
 		t.Error(9)
 	}
 }
@@ -128,7 +132,7 @@ func TestConnpoolGetAndRelease(t *testing.T) {
 		t.Error(1)
 	}
 
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(2)
 	}
 
@@ -138,16 +142,16 @@ func TestConnpoolGetAndRelease(t *testing.T) {
 		t.Error(3)
 	}
 
-	if len(p.pool[A2]) != 1 {
+	if len(p.pool[A2].conns) != 1 {
 		t.Error(4)
 	}
 
 	timer := time.NewTimer(3 * time.Second)
 	<-timer.C
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(5)
 	}
-	if len(p.pool[A2]) != 1 {
+	if len(p.pool[A2].conns) != 1 {
 		t.Error(6)
 	}
 
@@ -157,13 +161,18 @@ func TestConnpoolGetAndRelease(t *testing.T) {
 	timer = time.NewTimer(4 * time.Second)
 	<-timer.C
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	mgr1 := p.pool[A1]
+	mgr1.Lock()
+	defer mgr1.Unlock()
 
-	if len(p.pool[A1]) != 0 {
+	if len(p.pool[A1].conns) != 0 {
 		t.Error(7)
 	}
-	if len(p.pool[A2]) != 0 {
+
+	mgr2 := p.pool[A2]
+	mgr2.Lock()
+	defer mgr2.Unlock()
+	if len(p.pool[A2].conns) != 0 {
 		t.Error(8)
 	}
 }
@@ -178,7 +187,7 @@ func TestRemoveConn(t *testing.T) {
 		t.Error(1)
 	}
 
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(2)
 	}
 
@@ -188,29 +197,44 @@ func TestRemoveConn(t *testing.T) {
 		t.Error(3)
 	}
 
-	if len(p.pool[A2]) != 1 {
+	if len(p.pool[A2].conns) != 1 {
 		t.Error(4)
 	}
 
 	timer := time.NewTimer(3 * time.Second)
 	<-timer.C
-	if len(p.pool[A1]) != 1 {
+	if len(p.pool[A1].conns) != 1 {
 		t.Error(5)
 	}
-	if len(p.pool[A2]) != 1 {
+	if len(p.pool[A2].conns) != 1 {
 		t.Error(6)
 	}
 
 	p.Remove(conn1)
 	p.Remove(conn2)
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	mgr1 := p.pool[A1]
+	mgr1.Lock()
+	defer mgr1.Unlock()
 
-	if len(p.pool[A1]) != 0 {
+	if len(p.pool[A1].conns) != 0 {
 		t.Error(7)
 	}
-	if len(p.pool[A2]) != 0 {
+
+	mgr2 := p.pool[A2]
+	mgr2.Lock()
+	defer mgr2.Unlock()
+	if len(p.pool[A2].conns) != 0 {
 		t.Error(8)
 	}
+}
+
+func TestTimeout(t *testing.T) {
+	p := NewPool()
+	p.SetKeepAliveTimeout(3 * time.Second)
+	_, err := p.GetTimeout("a1.alipay-inc.xyz", 1*time.Millisecond)
+	if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+		return
+	}
+	t.Error(9)
 }
