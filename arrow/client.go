@@ -26,13 +26,15 @@ var hopHeaders = []string{
 	"Upgrade",
 }
 
+// ProxyHandler handle requests
 type ProxyHandler struct {
 	serverAddr string
 	connPool   *connpool.ConnectionPool
+	logger     *logrus.Logger
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("new req:", r.Method, r.URL, r.Proto)
+	h.logger.Debugln("new req:", r.Method, r.URL, r.Proto)
 
 	if r.Method == "CONNECT" {
 		h.preprocessHeader(r)
@@ -98,7 +100,7 @@ func (h *ProxyHandler) preprocessHeader(r *http.Request) {
 func (h *ProxyHandler) writeConnHeader(rConn io.ReadWriter, r *http.Request, w http.ResponseWriter) {
 	rHost := ensurePort(r.Host)
 	err := binary.Write(rConn, binary.LittleEndian, int64(len(rHost)))
-	fmt.Println("rHost:", rHost, "size:", len(rHost))
+	h.logger.Debugln("rHost:", rHost, "size:", len(rHost))
 	if err != nil {
 		fmt.Fprintln(w, "Error connecting proxy server: ", err)
 	}
@@ -110,16 +112,19 @@ func (h *ProxyHandler) writeConnHeader(rConn io.ReadWriter, r *http.Request, w h
 	}
 }
 
+// Client definition
 type Client struct {
 	*Config
 	logger *logrus.Logger
 }
 
+// Run proxy client
 func (c *Client) Run() (err error) {
 	cp := connpool.NewPool()
 	h := &ProxyHandler{
 		serverAddr: c.ServerAddress,
 		connPool:   &cp,
+		logger:     c.logger,
 	}
 
 	s := http.Server{
@@ -133,6 +138,7 @@ func (c *Client) Run() (err error) {
 	return s.Serve(l)
 }
 
+// NewClient factory
 func NewClient(c *Config) (s Runnable) {
 	logrus.SetFormatter(&logrus.TextFormatter{})
 	logrus.SetLevel(logrus.DebugLevel)
