@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -25,14 +26,16 @@ func NewPool() ConnectionPool {
 		timeout: DefaultKeepAliveTimeout,
 		// id -> ConnManager
 		// id is like 1.2.3.4:90, the resolved remoteAddr
-		pool: make(map[string]*ConnManager),
+		container: make(map[string]*ConnManager),
+		mu:        &sync.Mutex{},
 	}
 }
 
 // ConnectionPool a connection pool
 type ConnectionPool struct {
-	timeout time.Duration
-	pool    map[string]*ConnManager
+	timeout   time.Duration
+	container map[string]*ConnManager
+	mu        *sync.Mutex
 }
 
 // SetKeepAliveTimeout sets after `to` seconds, conn released to pool will be removed
@@ -57,11 +60,16 @@ func (p *ConnectionPool) get(remoteAddr string, timeout time.Duration) (conn *Ma
 		return
 	}
 	id := tcpAddr.String()
-	mgr := p.pool[id]
+	mgr := p.container[id]
 
 	if mgr == nil {
-		mgr = NewConnManager()
-		p.pool[id] = mgr
+		p.mu.Lock()
+		mgr = p.container[id]
+		if mgr == nil {
+			mgr = NewConnManager()
+			p.container[id] = mgr
+		}
+		p.mu.Unlock()
 	}
 
 	mgr.Lock()
@@ -85,7 +93,7 @@ func (p *ConnectionPool) get(remoteAddr string, timeout time.Duration) (conn *Ma
 func (p *ConnectionPool) Remove(conn *ManagedConn) {
 	debug("remove conn %p\n", conn)
 	id := conn.RemoteAddr().String()
-	mgr := p.pool[id]
+	mgr := p.container[id]
 	mgr.Lock()
 	defer mgr.Unlock()
 	p.remove(conn)
@@ -101,7 +109,7 @@ func (p *ConnectionPool) Put(conn *ManagedConn) {
 		<-timer.C
 
 		id := conn.RemoteAddr().String()
-		mgr := p.pool[id]
+		mgr := p.container[id]
 		// Lock it
 		mgr.Lock()
 		defer mgr.Unlock()
@@ -116,7 +124,7 @@ func (p *ConnectionPool) Put(conn *ManagedConn) {
 
 func (p *ConnectionPool) remove(conn *ManagedConn) {
 	id := conn.RemoteAddr().String()
-	mgr := p.pool[id]
+	mgr := p.container[id]
 	idx := findIdx(mgr.conns, conn)
 	if idx == -1 {
 		// conn has already been released
@@ -138,7 +146,7 @@ func (p ConnectionPool) createConn(tcpAddr *net.TCPAddr, timeout time.Duration) 
 			TCPConn: *rawConn.(*net.TCPConn),
 			idle:    0,
 		}
-		mgr := p.pool[tcpAddr.String()]
+		mgr := p.container[tcpAddr.String()]
 		mgr.conns = append(mgr.conns, conn)
 		debug("creating new conn: %p\n", conn)
 	}
@@ -146,7 +154,7 @@ func (p ConnectionPool) createConn(tcpAddr *net.TCPAddr, timeout time.Duration) 
 }
 
 func (p ConnectionPool) getFreeConn(id string) (c *ManagedConn) {
-	for _, c = range p.pool[id].conns {
+	for _, c = range p.container[id].conns {
 		debug("scanning cann %p, idle: %v\n", c, c.idle)
 		if atomic.LoadUint32(&c.idle) == 1 {
 			debug("found free conn: %p\n", c)

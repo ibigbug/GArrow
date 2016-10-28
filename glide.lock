@@ -1,8 +1,8 @@
 hash: 0f119ebe3a7a59d1e671121e5489021aa122933c28dab70891ddf85b1d518dcb
-updated: 2016-10-28T01:33:43.979763122+08:00
+updated: 2016-10-28T13:31:23.110817+08:00
 imports:
 - name: github.com/ibigbug/conn-pool
-  version: 6a259f5adfeb535da261e9fcdafe490f636859df
+  version: 6a760a9fe9fea0d7338935565b85f3302efe30d5
   subpackages:
   - connpool
 - name: github.com/Sirupsen/logrus
