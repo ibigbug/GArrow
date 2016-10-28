@@ -60,17 +60,14 @@ func (p *ConnectionPool) get(remoteAddr string, timeout time.Duration) (conn *Ma
 		return
 	}
 	id := tcpAddr.String()
-	mgr := p.container[id]
 
+	p.mu.Lock()
+	mgr := p.container[id]
 	if mgr == nil {
-		p.mu.Lock()
-		mgr = p.container[id]
-		if mgr == nil {
-			mgr = NewConnManager()
-			p.container[id] = mgr
-		}
-		p.mu.Unlock()
+		mgr = NewConnManager()
+		p.container[id] = mgr
 	}
+	p.mu.Unlock()
 
 	mgr.Lock()
 	defer mgr.Unlock()

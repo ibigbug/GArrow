@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -70,24 +69,16 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		remain := make([]byte, bs)
 		n, _ := buf.Read(remain)
 		if n != bs {
-			log.Fatalln(n, bs)
+			h.logger.Warningln(n, bs)
+			fmt.Fprintln(w, "Request malformed", http.StatusBadRequest)
 		}
 		rConn.Write(remain)
 	}
 
 	if r.Method == "CONNECT" {
-		h.handleHTTPS(rConn, cConn)
-	} else {
-		h.handleHTTP(rConn, cConn)
+		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
+
 	}
-}
-
-func (h *ProxyHandler) handleHTTPS(rConn io.ReadWriter, cConn io.ReadWriter) {
-	cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
-	pipeWithTimeout(rConn, cConn)
-}
-
-func (h *ProxyHandler) handleHTTP(rConn io.ReadWriter, cConn io.ReadWriter) {
 	pipeWithTimeout(rConn, cConn)
 }
 
