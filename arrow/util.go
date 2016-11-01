@@ -18,7 +18,7 @@ func checkError(err error) {
 	}
 }
 
-func pipeWithTimeout(rConn io.ReadWriter, cConn io.ReadWriter) {
+func pipeConn(rConn io.ReadWriter, cConn io.ReadWriter) {
 
 	go func() {
 		r1, w1 := io.Pipe()

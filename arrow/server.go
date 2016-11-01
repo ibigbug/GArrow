@@ -62,8 +62,8 @@ func (s *Server) handle(cConn *ConnWithHeader) {
 		return
 	}
 
-	pipeWithTimeout(rConn, cConn)
-	s.connPool.Remove(rConn)
+	pipeConn(rConn, cConn)
+	s.connPool.Put(rConn)
 
 }
 

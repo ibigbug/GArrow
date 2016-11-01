@@ -8,15 +8,16 @@ import (
 )
 
 type Conn struct {
+	net.Conn
 }
 
-func Dial(remote string) (c net.Conn, err error) {
-	return net.Dial("tcp", remote)
+func Dial(network, remote string) (c net.Conn, err error) {
+	return net.Dial(network, remote)
 }
 
-var ArrowTransport http.RoundTripper = &http.Transport{
+var ArrowTransport = &http.Transport{
 	DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-		return net.Dial(network, address)
+		return Dial(network, address)
 	},
 	DisableKeepAlives:     false,
 	DisableCompression:    false,
