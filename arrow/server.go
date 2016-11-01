@@ -2,7 +2,6 @@ package arrow
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -50,7 +49,8 @@ func (s *Server) handle(cConn *ConnWithHeader) {
 	var rConn *connpool.ManagedConn
 
 	rHost, err := s.peekHeader(cConn)
-	fmt.Println("rHost got:", rHost)
+
+	s.logger.Infoln("rHost got:", rHost)
 	if err != nil {
 		s.logger.Errorln("Error reading header: ", err)
 		return

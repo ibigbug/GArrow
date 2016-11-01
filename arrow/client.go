@@ -6,11 +6,9 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"os"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/ibigbug/conn-pool/connpool"
 )
 
 var hopHeaders = []string{
@@ -28,58 +26,53 @@ var hopHeaders = []string{
 // ProxyHandler handle requests
 type ProxyHandler struct {
 	serverAddr string
-	connPool   *connpool.ConnectionPool
 	logger     *logrus.Logger
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Debugln("new req:", r.Method, r.URL, r.Proto)
+	h.logger.Infoln("new req:", r.Method, r.URL.Path, r.Proto)
 
-	if r.Method == "CONNECT" {
-		h.preprocessHeader(r)
-	}
-
-	rConn, err := h.connPool.Get(h.serverAddr)
+	rConn, err := Dial(h.serverAddr)
 	if err != nil {
 		fmt.Fprintln(w, "Error connecting proxy server: ", err)
 		return
 	}
 
 	h.writeConnHeader(rConn, r, w)
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
-		return
-	}
-	cConn, buf, err := hj.Hijack()
-	defer cConn.Close()
-	if err != nil {
-		fmt.Fprintln(w, "Error doing proxy hijack:", err)
-		return
-	}
-
-	// WTF the difference between httputil.DumpRequest ?
-	req, err := httputil.DumpRequestOut(r, false)
-	if err != nil {
-		fmt.Fprintln(w, "Error doing proxy hijack:", err)
-	}
-	rConn.Write(req)
-	bs := buf.Reader.Buffered()
-	if bs > 0 {
-		remain := make([]byte, bs)
-		n, _ := buf.Read(remain)
-		if n != bs {
-			h.logger.Warningln(n, bs)
-			fmt.Fprintln(w, "Request malformed", http.StatusBadRequest)
-		}
-		rConn.Write(remain)
-	}
 
 	if r.Method == "CONNECT" {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
+			return
+		}
+		// TODO(ibigbug): ignore the hijack buf
+		// If meet strange packet lossing issue, check here
+		cConn, _, err := hj.Hijack()
+		defer cConn.Close()
+		if err != nil {
+			fmt.Fprintln(w, "Error doing proxy hijack:", err)
+			return
+		}
 		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
+		pipeWithTimeout(rConn, cConn)
+	} else {
+		h.preprocessHeader(r)
 
+		res, err := ArrowTransport.RoundTrip(r)
+		defer res.Body.Close()
+		if err != nil {
+			if err != io.EOF {
+				fmt.Fprintln(w, "Error proxy request:", err)
+			}
+			return
+		}
+
+		writeHeader(w, res.Header)
+		w.WriteHeader(res.StatusCode)
+		io.Copy(w, res.Body)
+		// TODO(ibigbug) Trailers
 	}
-	pipeWithTimeout(rConn, cConn)
 }
 
 func (h *ProxyHandler) preprocessHeader(r *http.Request) {
@@ -111,21 +104,18 @@ type Client struct {
 
 // Run proxy client
 func (c *Client) Run() (err error) {
-	cp := connpool.NewPool()
 	h := &ProxyHandler{
 		serverAddr: c.ServerAddress,
-		connPool:   &cp,
 		logger:     c.logger,
 	}
 
 	s := http.Server{
 		Handler: h,
-		ConnState: func(c net.Conn, s http.ConnState) {
-			fmt.Println("conn:", c.LocalAddr(), "<->", c.RemoteAddr(), "state:", s)
-		},
 	}
+
 	l, err := net.Listen("tcp", c.LocalAddress)
 	c.logger.Infoln("Running client at: ", c.LocalAddress)
+
 	return s.Serve(l)
 }
 

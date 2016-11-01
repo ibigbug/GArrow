@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -37,4 +38,12 @@ func ensurePort(s string) (h string) {
 		h = fmt.Sprintf("%s:80", s)
 	}
 	return
+}
+
+func writeHeader(w http.ResponseWriter, hdr http.Header) {
+	for k, vv := range hdr {
+		for _, v := range vv {
+			w.Header().Add(k, v)
+		}
+	}
 }
