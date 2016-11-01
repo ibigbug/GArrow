@@ -11,13 +11,14 @@ type Conn struct {
 	net.Conn
 }
 
-func Dial(network, remote string) (c net.Conn, err error) {
+func Dial(network, remote, password string) (c net.Conn, err error) {
 	return net.Dial(network, remote)
 }
 
 var ArrowTransport = &http.Transport{
 	DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-		return Dial(network, address)
+		password := ctx.Value("password").(string)
+		return Dial(network, address, password)
 	},
 	DisableKeepAlives:     false,
 	DisableCompression:    false,

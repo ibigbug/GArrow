@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -27,12 +28,13 @@ var hopHeaders = []string{
 type ProxyHandler struct {
 	serverAddr string
 	logger     *logrus.Logger
+	password   string
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.logger.Infoln("new req:", r.Method, r.URL.Path, r.Proto)
 
-	rConn, err := Dial("tcp4", h.serverAddr)
+	rConn, err := Dial("tcp4", h.serverAddr, h.password)
 	if err != nil {
 		fmt.Fprintln(w, "Error connecting proxy server: ", err)
 		return
@@ -59,7 +61,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rConn.Close() // TODO: using pool
 	} else {
 		h.preprocessHeader(r)
-		res, err := ArrowTransport.RoundTrip(r)
+		var ctx = context.WithValue(context.Background(), "password", h.password)
+		res, err := ArrowTransport.RoundTrip(r.WithContext(ctx))
 		defer res.Body.Close()
 		if err != nil {
 			fmt.Fprintln(w, "Error proxy request:", err)
@@ -104,6 +107,7 @@ func (c *Client) Run() (err error) {
 	h := &ProxyHandler{
 		serverAddr: c.ServerAddress,
 		logger:     c.logger,
+		password:   c.Password,
 	}
 
 	s := http.Server{
