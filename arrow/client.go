@@ -60,13 +60,16 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pipeConn(rConn, cConn)
 		rConn.Close() // TODO: using pool
 	} else {
+		defer r.Body.Close()
 		h.preprocessHeader(r)
 		var ctx = context.WithValue(context.Background(), "password", h.password)
 		res, err := ArrowTransport.RoundTrip(r.WithContext(ctx))
-		defer res.Body.Close()
 		if err != nil {
 			fmt.Fprintln(w, "Error proxy request:", err)
 			return
+		}
+		if res.Body != nil {
+			defer res.Body.Close()
 		}
 		writeHeader(w, res.Header)
 		w.WriteHeader(res.StatusCode)

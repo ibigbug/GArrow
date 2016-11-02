@@ -2,9 +2,10 @@ package arrow
 
 import (
 	"encoding/binary"
-	"net"
 	"os"
 	"time"
+
+	"net"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/ibigbug/conn-pool/connpool"
@@ -23,29 +24,22 @@ func (s *Server) Run() (err error) {
 		s.logger.Fatal("config.server can not be nil")
 	}
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp", s.ServerAddress)
-	if err != nil {
-		s.logger.Fatalln("Invalid config.server: ", s.ServerAddress, err)
-	}
-	l, err := net.ListenTCP("tcp", tcpAddr)
+	l, err := ArrowListen("tcp", s.ServerAddress, s.Password)
 	defer l.Close()
 	checkError(err)
 
 	s.logger.Infoln("Server running at: ", s.ServerAddress)
 	for {
-		conn, err := l.AcceptTCP()
+		conn, err := l.Accept()
 		if err != nil {
 			s.logger.Errorln("Accept error: ", err)
 			continue
 		}
-		go s.handle(&ConnWithHeader{
-			TCPConn:      conn,
-			headerPeeked: false,
-		})
+		go s.handle(conn)
 	}
 }
 
-func (s *Server) handle(cConn *ConnWithHeader) {
+func (s *Server) handle(cConn net.Conn) {
 	var rConn *connpool.ManagedConn
 
 	rHost, err := s.peekHeader(cConn)
@@ -67,7 +61,7 @@ func (s *Server) handle(cConn *ConnWithHeader) {
 
 }
 
-func (s *Server) peekHeader(conn *ConnWithHeader) (host string, err error) {
+func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 	var size int64
 	err = binary.Read(conn, binary.LittleEndian, &size)
 	if err != nil {
