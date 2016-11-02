@@ -2,7 +2,6 @@ package arrow
 
 import (
 	"encoding/binary"
-	"os"
 	"time"
 
 	"net"
@@ -41,24 +40,23 @@ func (s *Server) Run() (err error) {
 
 func (s *Server) handle(cConn net.Conn) {
 	var rConn *connpool.ManagedConn
-
 	rHost, err := s.peekHeader(cConn)
-
 	s.logger.Infoln("rHost got:", rHost)
 	if err != nil {
+		cConn.Close() // no leak
 		s.logger.Errorln("Error reading header: ", err)
 		return
 	}
-
 	rConn, err = s.connPool.GetTimeout(rHost, 5*time.Second)
 	if err != nil {
+		// 'cause io.Copy not started yet
+		// Read/Write Deadline doesn't cover this case
+		cConn.Close() // no leak
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
-
 	pipeConn(rConn, cConn)
-	s.connPool.Put(rConn)
-
+	s.connPool.Remove(rConn)
 }
 
 func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
@@ -78,9 +76,6 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 
 // NewServer proxy server factory
 func NewServer(c *Config) (s Runnable) {
-	logrus.SetFormatter(&logrus.TextFormatter{})
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stderr)
 	var logger = logrus.New()
 	logger.WithFields(logrus.Fields{
 		"from": "server",

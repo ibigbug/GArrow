@@ -7,22 +7,23 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"os"
 )
 
 type Cipher struct {
-	iv    []byte
 	block cipher.Block
 	encer cipher.Stream
 	decer cipher.Stream
 }
 
-func (c *Cipher) initEncer() {
-	iv := make([]byte, aes.BlockSize)
+func (c *Cipher) initEncer() (iv []byte) {
+	iv = make([]byte, aes.BlockSize)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		fmt.Println("Error initialize encer:", err)
+		fmt.Fprintln(os.Stderr, "Error initialize encer:", err)
+		return
 	}
-	c.iv = iv
 	c.encer = cipher.NewCFBEncrypter(c.block, iv)
+	return
 }
 
 func (c *Cipher) Encrypt(plain []byte) (ciphered []byte) {

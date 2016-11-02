@@ -9,9 +9,9 @@ func TestEncDec(t *testing.T) {
 	password := "000"
 
 	c, _ := NewCipher(password)
-	c.initEncer()
+	iv := c.initEncer()
 	ciphered := c.Encrypt(plain)
-	c.initDecer(c.iv)
+	c.initDecer(iv)
 	c.Decrypt(ciphered)
 
 	if !reflect.DeepEqual(plain, ciphered) {

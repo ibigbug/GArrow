@@ -2,12 +2,10 @@ package arrow
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -24,7 +22,6 @@ var hopHeaders = []string{
 	"Upgrade",
 }
 
-// ProxyHandler handle requests
 type ProxyHandler struct {
 	serverAddr string
 	logger     *logrus.Logger
@@ -32,17 +29,21 @@ type ProxyHandler struct {
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Infoln("new req:", r.Method, r.URL.Path, r.Proto)
-
-	rConn, err := Dial("tcp4", h.serverAddr, h.password)
-	if err != nil {
-		fmt.Fprintln(w, "Error connecting proxy server: ", err)
-		return
-	}
-
-	h.writeConnHeader(rConn, r, w)
+	h.logger.Infoln(r.Method, r.URL.Path, r.Proto)
 
 	if r.Method == "CONNECT" {
+		rConn, err := Dial("tcp4", h.serverAddr, h.password)
+		if err != nil {
+			fmt.Fprintln(w, "Error connecting proxy server: ", err)
+			return
+		}
+
+		err = setHost(rConn, r.Host)
+		if err != nil {
+			fmt.Fprintln(w, "Error negotiating with proxy server", err)
+			return
+		}
+
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			fmt.Fprintln(w, "Error doing proxy hijack:", http.StatusInternalServerError)
@@ -58,13 +59,19 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
 		pipeConn(rConn, cConn)
-		rConn.Close() // TODO: using pool
 	} else {
 		defer r.Body.Close()
 		h.preprocessHeader(r)
-		var ctx = context.WithValue(context.Background(), "password", h.password)
+		// Already got a conn.
+		var d = &map[string]string{
+			"password": h.password,
+			"rHost":    r.Host,
+			"address":  h.serverAddr,
+		}
+		var ctx = context.WithValue(r.Context(), "d", d)
 		res, err := ArrowTransport.RoundTrip(r.WithContext(ctx))
 		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
 			fmt.Fprintln(w, "Error proxy request:", err)
 			return
 		}
@@ -84,28 +91,11 @@ func (h *ProxyHandler) preprocessHeader(r *http.Request) {
 	}
 }
 
-func (h *ProxyHandler) writeConnHeader(rConn io.ReadWriter, r *http.Request, w http.ResponseWriter) {
-	rHost := ensurePort(r.Host)
-	err := binary.Write(rConn, binary.LittleEndian, int64(len(rHost)))
-	h.logger.Debugln("rHost:", rHost, "size:", len(rHost))
-	if err != nil {
-		fmt.Fprintln(w, "Error connecting proxy server: ", err)
-	}
-
-	// TODO: byte order?
-	n, err := rConn.Write([]byte(rHost))
-	if n != len(rHost) {
-		fmt.Fprintln(w, "Error connecting proxy server: ", err)
-	}
-}
-
-// Client definition
 type Client struct {
 	*Config
 	logger *logrus.Logger
 }
 
-// Run proxy client
 func (c *Client) Run() (err error) {
 	h := &ProxyHandler{
 		serverAddr: c.ServerAddress,
@@ -117,17 +107,15 @@ func (c *Client) Run() (err error) {
 		Handler: h,
 	}
 
-	l, err := net.Listen("tcp", c.LocalAddress)
+	var l net.Listener
+	if l, err = net.Listen("tcp", c.LocalAddress); err != nil {
+		return err
+	}
 	c.logger.Infoln("Running client at: ", c.LocalAddress)
-
 	return s.Serve(l)
 }
 
-// NewClient factory
 func NewClient(c *Config) (s Runnable) {
-	logrus.SetFormatter(&logrus.TextFormatter{})
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stderr)
 	var logger = logrus.New()
 	logger.WithFields(logrus.Fields{
 		"from": "client",

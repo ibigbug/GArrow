@@ -21,7 +21,7 @@ func NewConfig(p string) (c *Config) {
 	fd, err := os.Open(p)
 	defer fd.Close()
 	if os.IsNotExist(err) {
-		fmt.Println("No such file: " + p)
+		fmt.Fprintln(os.Stderr, "No such file: "+p)
 		os.Exit(1)
 	}
 	checkError(err)
