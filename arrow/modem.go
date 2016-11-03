@@ -16,12 +16,12 @@ func Dial(network, remote, password string) (c net.Conn, err error) {
 		fmt.Fprintln(os.Stderr, "Error connecting proxy server", err)
 		return
 	}
-	//cipher, err := NewCipher(password)
+	cipher, err := NewCipher(password)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error getting cipher", err)
 		return
 	}
-	c = NewTimeoutConn(rc, IDLE_TIMEOUT)
+	c = NewEncryptConn(rc, cipher)
 	return
 }
 
@@ -46,13 +46,13 @@ type ArrowListener struct {
 }
 
 func (l *ArrowListener) Accept() (c net.Conn, err error) {
-	//cipher, err := NewCipher(l.password)
+	cipher, err := NewCipher(l.password)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error getting cipher", err)
 		return
 	}
 	rc, err := l.Listener.Accept()
-	c = NewTimeoutConn(rc, IDLE_TIMEOUT)
+	c = NewEncryptConn(rc, cipher)
 	return
 }
 

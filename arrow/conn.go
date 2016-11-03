@@ -67,6 +67,15 @@ func (c *TimeoutConn) SetTimeout(t time.Duration) {
 	}
 }
 
+func NewEncryptConn(conn net.Conn, cipher *Cipher) (c net.Conn) {
+	tc := NewTimeoutConn(conn, IDLE_TIMEOUT)
+	c = &EncryptConn{
+		TimeoutConn: tc,
+		cipher:      cipher,
+	}
+	return
+}
+
 type EncryptConn struct {
 	*TimeoutConn
 	cipher *Cipher
@@ -83,7 +92,7 @@ func (c *EncryptConn) Read(b []byte) (n int, err error) {
 		c.cipher.initDecer(iv)
 	}
 	n, err = c.TimeoutConn.Read(b)
-	c.cipher.Decrypt(b)
+	c.cipher.Decrypt(b[:n])
 	return
 }
 
@@ -92,6 +101,7 @@ func (c *EncryptConn) Write(b []byte) (n int, err error) {
 		iv := c.cipher.initEncer()
 		c.TimeoutConn.Write(iv)
 	}
+
 	n, err = c.TimeoutConn.Write(c.cipher.Encrypt(b))
 	return
 }
