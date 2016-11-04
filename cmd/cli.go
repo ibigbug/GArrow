@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/ibigbug/GArrow/arrow"
 )
 
@@ -22,13 +23,17 @@ func main() {
 
 	c := arrow.NewConfig(*config)
 
+	logrus.SetFormatter(&logrus.TextFormatter{})
+	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetOutput(os.Stderr)
+
 	var s arrow.Runnable
 	if *mode == "client" {
 		s = arrow.NewClient(c)
 	} else if *mode == "server" {
 		s = arrow.NewServer(c)
 	} else {
-		fmt.Println("Unknow run mode")
+		fmt.Fprintln(os.Stderr, "Unknow run mode")
 		os.Exit(1)
 	}
 	log.Fatal(s.Run())

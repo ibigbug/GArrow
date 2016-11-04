@@ -1,10 +1,13 @@
 package arrow
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -14,8 +17,19 @@ var (
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
+func setHost(rConn net.Conn, rHost string) (err error) {
+	rHost = ensurePort(rHost)
+	err = binary.Write(rConn, binary.LittleEndian, int64(len(rHost)))
+	if err != nil {
+		return
+	}
+	// TODO: byte order?
+	_, err = rConn.Write([]byte(rHost))
+	return
 }
 
 func pipeConn(rConn io.ReadWriter, cConn io.ReadWriter) {
@@ -29,7 +43,6 @@ func pipeConn(rConn io.ReadWriter, cConn io.ReadWriter) {
 	r2, w2 := io.Pipe()
 	go io.Copy(cConn, r2)
 	io.Copy(w2, rConn)
-
 }
 
 func ensurePort(s string) (h string) {
