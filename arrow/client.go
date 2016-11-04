@@ -62,7 +62,6 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		defer r.Body.Close()
 		h.preprocessHeader(r)
-		// Already got a conn.
 		var d = &map[string]string{
 			"password": h.password,
 			"rHost":    r.Host,
