@@ -23,7 +23,7 @@ func (s *Server) Run() (err error) {
 		s.logger.Fatal("config.server can not be nil")
 	}
 
-	l, err := ArrowListen("tcp", s.ServerAddress, s.Password)
+	l, err := ArrowListen("tcp4", s.ServerAddress, s.Password)
 	defer l.Close()
 	checkError(err)
 
