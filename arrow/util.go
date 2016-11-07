@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Sirupsen/logrus"
 )
 
 var (
@@ -59,4 +61,16 @@ func writeHeader(w http.ResponseWriter, hdr http.Header) {
 			w.Header().Add(k, v)
 		}
 	}
+}
+
+func getLogger(name string) *logrus.Logger {
+	var logger = logrus.New()
+	logger.Formatter = &logrus.TextFormatter{
+		DisableColors: true,
+	}
+	logger.Level = logrus.DebugLevel
+	logger.WithFields(logrus.Fields{
+		"from": "client",
+	})
+	return logger
 }

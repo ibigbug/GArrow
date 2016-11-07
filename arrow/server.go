@@ -76,10 +76,8 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 
 // NewServer proxy server factory
 func NewServer(c *Config) (s Runnable) {
-	var logger = logrus.New()
-	logger.WithFields(logrus.Fields{
-		"from": "server",
-	})
+	var logger = getLogger("server")
+
 	connPool := connpool.NewPool()
 	s = &Server{
 		Config:   c,

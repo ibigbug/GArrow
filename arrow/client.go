@@ -115,11 +115,7 @@ func (c *Client) Run() (err error) {
 }
 
 func NewClient(c *Config) (s Runnable) {
-	var logger = logrus.New()
-	logger.WithFields(logrus.Fields{
-		"from": "client",
-	})
-
+	var logger = getLogger("client")
 	s = &Client{
 		Config: c,
 		logger: logger,
