@@ -29,7 +29,7 @@ type ProxyHandler struct {
 }
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Infoln(r.Method, r.URL.Path, r.Proto)
+	h.logger.Infoln(r.Method, r.URL, r.Proto)
 
 	if r.Method == "CONNECT" {
 		rConn, err := Dial("tcp4", h.serverAddr, h.password)
