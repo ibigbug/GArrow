@@ -66,8 +66,15 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 		return
 	}
 
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(size))
+	defer func() {
+		err := recover()
+		if err != nil {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, uint64(size))
+			s.logger.Errorln("Got wrong header:", b)
+		}
+	}()
+
 	header := make([]byte, size)
 	conn.Read(header)
 	host = string(header[:])
@@ -76,10 +83,8 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 
 // NewServer proxy server factory
 func NewServer(c *Config) (s Runnable) {
-	var logger = logrus.New()
-	logger.WithFields(logrus.Fields{
-		"from": "server",
-	})
+	var logger = getLogger("server")
+
 	connPool := connpool.NewPool()
 	s = &Server{
 		Config:   c,

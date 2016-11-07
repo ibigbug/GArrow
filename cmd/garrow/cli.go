@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/ibigbug/GArrow/arrow"
 )
 
@@ -22,10 +21,6 @@ func main() {
 	flag.Parse()
 
 	c := arrow.NewConfig(*config)
-
-	logrus.SetFormatter(&logrus.TextFormatter{})
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stderr)
 
 	var s arrow.Runnable
 	if *mode == "client" {
