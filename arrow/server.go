@@ -66,8 +66,15 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 		return
 	}
 
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(size))
+	defer func() {
+		err := recover()
+		if err != nil {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, uint64(size))
+			s.logger.Errorln("Got wrong header:", b)
+		}
+	}()
+
 	header := make([]byte, size)
 	conn.Read(header)
 	host = string(header[:])
