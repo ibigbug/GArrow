@@ -9,8 +9,17 @@ import (
 	"time"
 )
 
-func Dial(network, remote, password string) (c net.Conn, err error) {
+func Dial(network, remote, password string, reuse bool) (c net.Conn, err error) {
 	var rc net.Conn
+
+	if reuse {
+		c = getFreeConn()
+		if c != nil {
+			debug("Return reuse conn\n")
+			return c, ErrReused
+		}
+	}
+
 	rc, err = net.Dial(network, remote)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error connecting proxy server", err)
@@ -28,7 +37,7 @@ func Dial(network, remote, password string) (c net.Conn, err error) {
 var ArrowTransport = &http.Transport{
 	DialContext: func(ctx context.Context, network, _ string) (c net.Conn, err error) {
 		d := ctx.Value("d").(*map[string]string)
-		c, err = Dial(network, (*d)["address"], (*d)["password"])
+		c, err = Dial(network, (*d)["address"], (*d)["password"], false)
 		setHost(c, (*d)["rHost"])
 		return
 	},

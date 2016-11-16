@@ -32,16 +32,25 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.logger.Infoln(r.Method, r.URL, r.Proto)
 
 	if r.Method == "CONNECT" {
-		rConn, err := Dial("tcp4", h.serverAddr, h.password)
+		rConn, err := Dial("tcp4", h.serverAddr, h.password, true)
+		var reuseConn = false
+
 		if err != nil {
-			fmt.Fprintln(w, "Error connecting proxy server: ", err)
-			return
+			if err != ErrReused {
+				fmt.Fprintln(w, "Error connecting proxy server: ", err)
+				return
+			} else {
+				debug("Got reused conn\n")
+				reuseConn = true
+			}
 		}
 
-		err = setHost(rConn, r.Host)
-		if err != nil {
-			fmt.Fprintln(w, "Error negotiating with proxy server", err)
-			return
+		if !reuseConn {
+			err = setHost(rConn, r.Host)
+			if err != nil {
+				fmt.Fprintln(w, "Error negotiating with proxy server", err)
+				return
+			}
 		}
 
 		hj, ok := w.(http.Hijacker)

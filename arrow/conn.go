@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	IDLE_TIMEOUT = 5 * time.Second
+	IDLE_TIMEOUT = 3 * time.Second
 )
 
 func NewTimeoutConn(conn net.Conn, timeout time.Duration) (c *TimeoutConn) {
@@ -39,7 +39,7 @@ func (c *TimeoutConn) Read(b []byte) (n int, err error) {
 		}
 	}
 	if c.timeout > 0 {
-		c.Conn.SetDeadline(time.Now().Add(c.timeout))
+		c.SetDeadline(time.Now().Add(c.timeout))
 	}
 	return
 }
@@ -55,7 +55,7 @@ func (c *TimeoutConn) Write(b []byte) (n int, err error) {
 		}
 	}
 	if c.timeout > 0 {
-		c.Conn.SetDeadline(time.Now().Add(c.timeout))
+		c.SetDeadline(time.Now().Add(c.timeout))
 	}
 	return
 }
@@ -63,11 +63,25 @@ func (c *TimeoutConn) Write(b []byte) (n int, err error) {
 func (c *TimeoutConn) SetTimeout(t time.Duration) {
 	c.timeout = t
 	if t > 0 {
-		c.Conn.SetDeadline(time.Now().Add(t))
+		c.SetDeadline(time.Now().Add(t))
 	}
 }
 
-func NewEncryptConn(conn net.Conn, cipher *Cipher) (c net.Conn) {
+func (c *TimeoutConn) String() string {
+	return fmt.Sprintf("conn: %s <-> %s", c.LocalAddr(), c.RemoteAddr())
+}
+
+func (c *TimeoutConn) Close() (e error) {
+	debug("Close conn called: %s\n", c)
+	if !putFreeConn(c) {
+		debug("Close it.\n")
+		return c.Conn.Close()
+	}
+	debug("Put back to connection pool\n")
+	return
+}
+
+func NewEncryptConn(conn net.Conn, cipher *Cipher) (c *EncryptConn) {
 	tc := NewTimeoutConn(conn, IDLE_TIMEOUT)
 	c = &EncryptConn{
 		TimeoutConn: tc,
