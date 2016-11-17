@@ -14,9 +14,13 @@ func Dial(network, remote, password string, reuse bool) (c net.Conn, err error) 
 
 	if reuse {
 		c = getFreeConn()
-		if c != nil {
-			debug("Return reuse conn\n")
-			return c, ErrReused
+		if c != nil && !c.(*EncryptConn).closed {
+			debug("reuse conn")
+			return
+		} else {
+			if c != nil {
+				debug("reused conn closed, dial new one")
+			}
 		}
 	}
 
@@ -30,7 +34,7 @@ func Dial(network, remote, password string, reuse bool) (c net.Conn, err error) 
 		fmt.Fprintln(os.Stderr, "Error getting cipher", err)
 		return
 	}
-	c = NewEncryptConn(rc, cipher)
+	c = NewEncryptConn(rc, cipher, IDLE_TIMEOUT)
 	return
 }
 
@@ -61,7 +65,7 @@ func (l *ArrowListener) Accept() (c net.Conn, err error) {
 		return
 	}
 	rc, err := l.Listener.Accept()
-	c = NewEncryptConn(rc, cipher)
+	c = NewEncryptConn(rc, cipher, IDLE_TIMEOUT)
 	return
 }
 

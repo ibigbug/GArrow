@@ -30,22 +30,20 @@ type ProxyHandler struct {
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.logger.Infoln(r.Method, r.URL, r.Proto)
-
+	h.preprocessHeader(r)
 	if r.Method == "CONNECT" {
 		rConn, err := Dial("tcp4", h.serverAddr, h.password, true)
-		var reuseConn = false
-
 		if err != nil {
-			if err != ErrReused {
-				fmt.Fprintln(w, "Error connecting proxy server: ", err)
-				return
-			} else {
-				debug("Got reused conn\n")
-				reuseConn = true
-			}
+			fmt.Fprintln(w, "Error connecting proxy server: ", err)
+			return
 		}
-
-		if !reuseConn {
+		ec, ok := rConn.(*EncryptConn)
+		if !ok {
+			fmt.Fprintln(w, "Error proxy", http.StatusInternalServerError)
+			return
+		}
+		debug("reused?: %v\n", ec.reused)
+		if !ec.reused {
 			err = setHost(rConn, r.Host)
 			if err != nil {
 				fmt.Fprintln(w, "Error negotiating with proxy server", err)
@@ -67,10 +65,20 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
-		pipeConn(rConn, cConn)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		debug("pipe1")
+		go pipeConnWithContext(ctx, cConn, rConn)
+		debug("pipe2")
+		pipeConnWithContext(context.Background(), rConn, cConn)
+
+		ec.mu.Lock()
+		defer ec.mu.Unlock()
+		ec.reused = true
+		putFreeConn(rConn)
+		debug("free conn back")
 	} else {
 		defer r.Body.Close()
-		h.preprocessHeader(r)
 		var d = &map[string]string{
 			"password": h.password,
 			"rHost":    r.Host,

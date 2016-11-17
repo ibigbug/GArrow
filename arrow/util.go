@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -13,7 +14,11 @@ import (
 )
 
 func debug(f string, a ...interface{}) {
-	fmt.Printf(f, a...)
+	if len(a) == 0 && !strings.HasSuffix(f, "\n") {
+		fmt.Println(f)
+	} else {
+		fmt.Printf(f, a...)
+	}
 }
 
 func checkError(err error) {
@@ -33,18 +38,30 @@ func setHost(rConn net.Conn, rHost string) (err error) {
 	return
 }
 
-func pipeConn(rConn io.ReadWriter, cConn io.ReadWriter) {
-
+func pipeConnWithContext(ctx context.Context, dst io.ReadWriter, src io.ReadWriter) {
+	var canceled = false
+	var c = make(chan int, 1)
 	go func() {
-		r1, w1 := io.Pipe()
-		go io.Copy(rConn, r1)
-		io.Copy(w1, cConn)
+		for !canceled {
+			buf := make([]byte, 1024)
+			n, err := src.Read(buf)
+			debug("n, err: %v, %v\n", n, err)
+			if n > 0 {
+				n, werr := dst.Write(buf[:n])
+				debug("n, werr: %v, %v\n", n, werr)
+			}
+			if err != nil {
+				debug("error while pipe: %v\n", err)
+				break
+			}
+		}
+		c <- 1
 	}()
-
-	r2, w2 := io.Pipe()
-	go io.Copy(cConn, r2)
-	n, err := io.Copy(w2, rConn)
-	debug("io.Copy", n, err)
+	select {
+	case <-ctx.Done():
+		canceled = true
+	case <-c:
+	}
 }
 
 func ensurePort(s string) (h string) {

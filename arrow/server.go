@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"encoding/binary"
 	"time"
 
@@ -55,8 +56,9 @@ func (s *Server) handle(cConn net.Conn) {
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
-	pipeConn(rConn, cConn)
-	s.connPool.Remove(rConn)
+	go pipeConnWithContext(context.Background(), cConn, rConn)
+	pipeConnWithContext(context.Background(), rConn, cConn)
+	s.connPool.Put(rConn)
 }
 
 func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
