@@ -37,18 +37,12 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Error connecting proxy server: ", err)
 			return
 		}
-		ec, ok := rConn.(*EncryptConn)
-		if !ok {
-			fmt.Fprintln(w, "Error proxy", http.StatusInternalServerError)
+		defer rConn.Close()
+
+		err = setHost(rConn, r.Host)
+		if err != nil {
+			fmt.Fprintln(w, "Error negotiating with proxy server", err)
 			return
-		}
-		debug("reused?: %v\n", ec.reused)
-		if !ec.reused {
-			err = setHost(rConn, r.Host)
-			if err != nil {
-				fmt.Fprintln(w, "Error negotiating with proxy server", err)
-				return
-			}
 		}
 
 		hj, ok := w.(http.Hijacker)
@@ -67,16 +61,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		debug("pipe1")
 		go pipeConnWithContext(ctx, cConn, rConn)
-		debug("pipe2")
 		pipeConnWithContext(context.Background(), rConn, cConn)
-
-		ec.mu.Lock()
-		defer ec.mu.Unlock()
-		ec.reused = true
-		putFreeConn(rConn)
-		debug("free conn back")
 	} else {
 		defer r.Body.Close()
 		var d = &map[string]string{

@@ -40,6 +40,7 @@ func (s *Server) Run() (err error) {
 }
 
 func (s *Server) handle(cConn net.Conn) {
+	defer cConn.Close()
 	var rConn *connpool.ManagedConn
 	rHost, err := s.peekHeader(cConn)
 	s.logger.Infoln("rHost got:", rHost)
@@ -58,7 +59,7 @@ func (s *Server) handle(cConn net.Conn) {
 	}
 	go pipeConnWithContext(context.Background(), cConn, rConn)
 	pipeConnWithContext(context.Background(), rConn, cConn)
-	s.connPool.Put(rConn)
+	s.connPool.Remove(rConn)
 }
 
 func (s *Server) peekHeader(conn net.Conn) (host string, err error) {

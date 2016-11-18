@@ -13,8 +13,8 @@ const (
 	IDLE_TIMEOUT = 60 * time.Second
 )
 
-func NewEncryptConn(conn net.Conn, cipher *Cipher, timeout time.Duration) (c *EncryptConn) {
-	c = &EncryptConn{
+func NewArrowConn(conn net.Conn, cipher *Cipher, timeout time.Duration) (c *ArrowConn) {
+	c = &ArrowConn{
 		Conn:    conn,
 		timeout: timeout,
 		mu:      &sync.Mutex{},
@@ -26,24 +26,27 @@ func NewEncryptConn(conn net.Conn, cipher *Cipher, timeout time.Duration) (c *En
 	return
 }
 
-type EncryptConn struct {
+type ArrowConn struct {
 	net.Conn
 	timeout time.Duration
 	closed  bool
 	reused  bool
 	mu      *sync.Mutex
 	cipher  *Cipher
+	disable bool
 }
 
-func (c *EncryptConn) Read(b []byte) (n int, err error) {
-	if c.cipher.decer == nil {
-		iv := make([]byte, aes.BlockSize)
-		n, err := io.ReadFull(c.Conn, iv)
-		if n != aes.BlockSize || err != nil {
-			err = fmt.Errorf("Error read cipher: %d, %s", n, err)
-			return 0, err
+func (c *ArrowConn) Read(b []byte) (n int, err error) {
+	if !c.disable {
+		if c.cipher.decer == nil {
+			iv := make([]byte, aes.BlockSize)
+			n, err := io.ReadFull(c.Conn, iv)
+			if n != aes.BlockSize || err != nil {
+				err = fmt.Errorf("Error read cipher: %d, %s", n, err)
+				return 0, err
+			}
+			c.cipher.initDecer(iv)
 		}
-		c.cipher.initDecer(iv)
 	}
 	n, err = c.Conn.Read(b)
 	if err != nil {
@@ -57,17 +60,25 @@ func (c *EncryptConn) Read(b []byte) (n int, err error) {
 	if c.timeout > 0 {
 		c.SetDeadline(time.Now().Add(c.timeout))
 	}
-	c.cipher.Decrypt(b[:n])
+	if !c.disable {
+		c.cipher.Decrypt(b[:n])
+	}
 	return
 }
 
-func (c *EncryptConn) Write(b []byte) (n int, err error) {
-	if c.cipher.encer == nil {
-		iv := c.cipher.initEncer()
-		c.Conn.Write(iv)
+func (c *ArrowConn) Write(b []byte) (n int, err error) {
+	if !c.disable {
+		if c.cipher.encer == nil {
+			iv := c.cipher.initEncer()
+			c.Conn.Write(iv)
+		}
 	}
 
-	n, err = c.Conn.Write(c.cipher.Encrypt(b))
+	if !c.disable {
+		n, err = c.Conn.Write(c.cipher.Encrypt(b))
+	} else {
+		n, err = c.Conn.Write(b)
+	}
 	if err != nil {
 		if nerr, ok := err.(net.Error); ok {
 			if !nerr.Temporary() || nerr.Timeout() {
@@ -82,20 +93,20 @@ func (c *EncryptConn) Write(b []byte) (n int, err error) {
 	return
 }
 
-func (c *EncryptConn) Close() error {
+func (c *ArrowConn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
 	return c.Conn.Close()
 }
 
-func (c *EncryptConn) SetTimeout(t time.Duration) {
+func (c *ArrowConn) SetTimeout(t time.Duration) {
 	c.timeout = t
 	if t > 0 {
 		c.SetDeadline(time.Now().Add(t))
 	}
 }
 
-func (c *EncryptConn) String() string {
+func (c *ArrowConn) String() string {
 	return fmt.Sprintf("conn: %s <-> %s", c.LocalAddr(), c.RemoteAddr())
 }

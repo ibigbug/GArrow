@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -38,20 +37,17 @@ func setHost(rConn net.Conn, rHost string) (err error) {
 	return
 }
 
-func pipeConnWithContext(ctx context.Context, dst io.ReadWriter, src io.ReadWriter) {
+func pipeConnWithContext(ctx context.Context, dst, src net.Conn) {
 	var canceled = false
 	var c = make(chan int, 1)
 	go func() {
 		for !canceled {
 			buf := make([]byte, 1024)
 			n, err := src.Read(buf)
-			debug("n, err: %v, %v\n", n, err)
 			if n > 0 {
-				n, werr := dst.Write(buf[:n])
-				debug("n, werr: %v, %v\n", n, werr)
+				dst.Write(buf[:n])
 			}
 			if err != nil {
-				debug("error while pipe: %v\n", err)
 				break
 			}
 		}
@@ -61,6 +57,7 @@ func pipeConnWithContext(ctx context.Context, dst io.ReadWriter, src io.ReadWrit
 	case <-ctx.Done():
 		canceled = true
 	case <-c:
+		debug("pipe done")
 	}
 }
 

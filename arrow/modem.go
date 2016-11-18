@@ -11,18 +11,17 @@ import (
 
 func Dial(network, remote, password string, reuse bool) (c net.Conn, err error) {
 	var rc net.Conn
-
-	if reuse {
-		c = getFreeConn()
-		if c != nil && !c.(*EncryptConn).closed {
-			debug("reuse conn")
-			return
-		} else {
-			if c != nil {
-				debug("reused conn closed, dial new one")
-			}
-		}
-	}
+	// if reuse {
+	// 	c = getFreeConn()
+	// 	if c != nil && !c.(*ArrowConn).closed {
+	// 		debug("reuse conn")
+	// 		return
+	// 	} else {
+	// 		if c != nil {
+	// 			debug("reused conn closed, dial new one")
+	// 		}
+	// 	}
+	// }
 
 	rc, err = net.Dial(network, remote)
 	if err != nil {
@@ -34,8 +33,9 @@ func Dial(network, remote, password string, reuse bool) (c net.Conn, err error) 
 		fmt.Fprintln(os.Stderr, "Error getting cipher", err)
 		return
 	}
-	c = NewEncryptConn(rc, cipher, IDLE_TIMEOUT)
-	return
+	ec := NewArrowConn(rc, cipher, IDLE_TIMEOUT)
+	ec.disable = true
+	return ec, nil
 }
 
 var ArrowTransport = &http.Transport{
@@ -65,8 +65,9 @@ func (l *ArrowListener) Accept() (c net.Conn, err error) {
 		return
 	}
 	rc, err := l.Listener.Accept()
-	c = NewEncryptConn(rc, cipher, IDLE_TIMEOUT)
-	return
+	ec := NewArrowConn(rc, cipher, IDLE_TIMEOUT)
+	ec.disable = true
+	return ec, nil
 }
 
 func ArrowListen(network, address, password string) (l net.Listener, err error) {
