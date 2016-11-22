@@ -1,7 +1,6 @@
 package arrow
 
 import (
-	"context"
 	"encoding/binary"
 	"time"
 
@@ -57,8 +56,9 @@ func (s *Server) handle(cConn net.Conn) {
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
-	go pipeConnWithContext(context.Background(), cConn, rConn)
-	pipeConnWithContext(context.Background(), rConn, cConn)
+	go pipeConn(cConn, rConn)
+	pipeConn(rConn, cConn)
+	// TODO: may reuse conn here
 	s.connPool.Remove(rConn)
 }
 

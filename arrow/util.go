@@ -1,7 +1,6 @@
 package arrow
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -9,10 +8,15 @@ import (
 	"os"
 	"strings"
 
+	"io"
+
 	"github.com/Sirupsen/logrus"
 )
 
 func debug(f string, a ...interface{}) {
+	if os.Getenv("ARROW_DEBUG") == "" {
+		return
+	}
 	if len(a) == 0 && !strings.HasSuffix(f, "\n") {
 		fmt.Println(f)
 	} else {
@@ -37,28 +41,12 @@ func setHost(rConn net.Conn, rHost string) (err error) {
 	return
 }
 
-func pipeConnWithContext(ctx context.Context, dst, src net.Conn) {
-	var canceled = false
-	var c = make(chan int, 1)
+func pipeConn(dst, src net.Conn) {
+	r, w := io.Pipe()
 	go func() {
-		for !canceled {
-			buf := make([]byte, 1024)
-			n, err := src.Read(buf)
-			if n > 0 {
-				dst.Write(buf[:n])
-			}
-			if err != nil {
-				break
-			}
-		}
-		c <- 1
+		io.Copy(dst, r)
 	}()
-	select {
-	case <-ctx.Done():
-		canceled = true
-	case <-c:
-		debug("pipe done")
-	}
+	io.Copy(w, src)
 }
 
 func ensurePort(s string) (h string) {

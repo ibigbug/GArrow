@@ -93,13 +93,6 @@ func (c *ArrowConn) Write(b []byte) (n int, err error) {
 	return
 }
 
-func (c *ArrowConn) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.closed = true
-	return c.Conn.Close()
-}
-
 func (c *ArrowConn) SetTimeout(t time.Duration) {
 	c.timeout = t
 	if t > 0 {
@@ -109,4 +102,11 @@ func (c *ArrowConn) SetTimeout(t time.Duration) {
 
 func (c *ArrowConn) String() string {
 	return fmt.Sprintf("conn: %s <-> %s", c.LocalAddr(), c.RemoteAddr())
+}
+
+func (c *ArrowConn) DisableEncrypt(b bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.disable = b
 }
