@@ -30,6 +30,7 @@ type ProxyHandler struct {
 
 func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.logger.Infoln(r.Method, r.URL, r.Proto)
+	h.preprocessHeader(r)
 
 	if r.Method == "CONNECT" {
 		rConn, err := Dial("tcp4", h.serverAddr, h.password)
@@ -37,6 +38,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Error connecting proxy server: ", err)
 			return
 		}
+		defer rConn.Close()
 
 		err = setHost(rConn, r.Host)
 		if err != nil {
@@ -58,10 +60,11 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cConn.Write([]byte("HTTP/1.0 200 Connection Established\r\n\r\n"))
+
+		go pipeConn(cConn, rConn)
 		pipeConn(rConn, cConn)
 	} else {
 		defer r.Body.Close()
-		h.preprocessHeader(r)
 		var d = &map[string]string{
 			"password": h.password,
 			"rHost":    r.Host,

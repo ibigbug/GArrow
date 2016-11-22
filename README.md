@@ -46,4 +46,4 @@ $ garrow -m client
 * [ ] distribution packaging
 * [ ] documentation
 * [ ] relay other protocol like pure HTTP/S proxy, shadowsocks protocol etc.
-* [ ] https connection reuse
+* [ ] ~~https connection reuse~~ It's impossible, since we don't know the data trasmitting and the point to release the connection.

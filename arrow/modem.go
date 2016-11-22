@@ -11,6 +11,7 @@ import (
 
 func Dial(network, remote, password string) (c net.Conn, err error) {
 	var rc net.Conn
+
 	rc, err = net.Dial(network, remote)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error connecting proxy server", err)
@@ -21,8 +22,8 @@ func Dial(network, remote, password string) (c net.Conn, err error) {
 		fmt.Fprintln(os.Stderr, "Error getting cipher", err)
 		return
 	}
-	c = NewEncryptConn(rc, cipher)
-	return
+	ec := NewArrowConn(rc, cipher, IDLE_TIMEOUT)
+	return ec, nil
 }
 
 var ArrowTransport = &http.Transport{
@@ -52,8 +53,8 @@ func (l *ArrowListener) Accept() (c net.Conn, err error) {
 		return
 	}
 	rc, err := l.Listener.Accept()
-	c = NewEncryptConn(rc, cipher)
-	return
+	ec := NewArrowConn(rc, cipher, IDLE_TIMEOUT)
+	return ec, nil
 }
 
 func ArrowListen(network, address, password string) (l net.Listener, err error) {

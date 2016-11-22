@@ -39,6 +39,7 @@ func (s *Server) Run() (err error) {
 }
 
 func (s *Server) handle(cConn net.Conn) {
+	defer cConn.Close()
 	var rConn *connpool.ManagedConn
 	rHost, err := s.peekHeader(cConn)
 	s.logger.Infoln("rHost got:", rHost)
@@ -55,7 +56,9 @@ func (s *Server) handle(cConn net.Conn) {
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
+	go pipeConn(cConn, rConn)
 	pipeConn(rConn, cConn)
+	// TODO: may reuse conn here
 	s.connPool.Remove(rConn)
 }
 

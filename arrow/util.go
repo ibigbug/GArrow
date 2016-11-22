@@ -2,20 +2,27 @@ package arrow
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 
+	"io"
+
 	"github.com/Sirupsen/logrus"
 )
 
-var (
-	ErrIdle = errors.New("Socket idle too long")
-)
+func debug(f string, a ...interface{}) {
+	if os.Getenv("ARROW_DEBUG") == "" {
+		return
+	}
+	if len(a) == 0 && !strings.HasSuffix(f, "\n") {
+		fmt.Println(f)
+	} else {
+		fmt.Printf(f, a...)
+	}
+}
 
 func checkError(err error) {
 	if err != nil {
@@ -34,17 +41,12 @@ func setHost(rConn net.Conn, rHost string) (err error) {
 	return
 }
 
-func pipeConn(rConn io.ReadWriter, cConn io.ReadWriter) {
-
+func pipeConn(dst, src net.Conn) {
+	r, w := io.Pipe()
 	go func() {
-		r1, w1 := io.Pipe()
-		go io.Copy(rConn, r1)
-		io.Copy(w1, cConn)
+		io.Copy(dst, r)
 	}()
-
-	r2, w2 := io.Pipe()
-	go io.Copy(cConn, r2)
-	io.Copy(w2, rConn)
+	io.Copy(w, src)
 }
 
 func ensurePort(s string) (h string) {
