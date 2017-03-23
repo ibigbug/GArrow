@@ -1,6 +1,8 @@
-hash: 40a9a7e2442d8092b47308876e83089c467630212474f9d093adbc61f9da9f2d
-updated: 2017-03-23T21:14:15.18082838+08:00
+hash: 3197897207adbea17c5d29773eeb559ce64cda076a54e167c7fc5f096c6830ef
+updated: 2017-03-23T21:35:18.551338542+08:00
 imports:
+- name: github.com/certifi/gocertifi
+  version: 03be5e6bb9874570ea7fb0961225d193cbc374c5
 - name: github.com/getsentry/raven-go
   version: b68337dbf03e7fbb53d9fd9b63fd09b28e8f13f7
 - name: github.com/ibigbug/conn-pool

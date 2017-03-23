@@ -75,7 +75,7 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			raven.CaptureErrorAndWait(err, nil)
+			raven.CaptureErrorAndWait(err.(error), nil)
 			b := make([]byte, 8)
 			binary.LittleEndian.PutUint64(b, uint64(size))
 			s.logger.Errorln("Got wrong header:", b)
