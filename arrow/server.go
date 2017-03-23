@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/Sirupsen/logrus"
+	raven "github.com/getsentry/raven-go"
 	"github.com/ibigbug/conn-pool/connpool"
 )
 
@@ -31,6 +32,7 @@ func (s *Server) Run() (err error) {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
+			raven.CaptureErrorAndWait(err, nil)
 			s.logger.Errorln("Accept error: ", err)
 			continue
 		}
@@ -53,6 +55,7 @@ func (s *Server) handle(cConn net.Conn) {
 		// 'cause io.Copy not started yet
 		// Read/Write Deadline doesn't cover this case
 		cConn.Close() // no leak
+		raven.CaptureErrorAndWait(err, nil)
 		s.logger.Errorln("Error dialing to remote: ", err)
 		return
 	}
@@ -72,6 +75,7 @@ func (s *Server) peekHeader(conn net.Conn) (host string, err error) {
 	defer func() {
 		err := recover()
 		if err != nil {
+			raven.CaptureErrorAndWait(err, nil)
 			b := make([]byte, 8)
 			binary.LittleEndian.PutUint64(b, uint64(size))
 			s.logger.Errorln("Got wrong header:", b)

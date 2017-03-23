@@ -2,6 +2,7 @@ package arrow
 
 import "errors"
 
+// Runnable is the client and server interface
 type Runnable interface {
 	Run() error
 }
