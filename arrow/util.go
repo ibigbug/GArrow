@@ -11,7 +11,12 @@ import (
 	"io"
 
 	"github.com/Sirupsen/logrus"
+	raven "github.com/getsentry/raven-go"
 )
+
+func init() {
+	raven.SetDSN("https://a680a8b9cc344eb79f065cdeaaf490bd:dfe4e7fbcaba43d994743707cd27d0e4@sentry.io/151139")
+}
 
 func debug(f string, a ...interface{}) {
 	if os.Getenv("ARROW_DEBUG") == "" {

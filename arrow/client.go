@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Sirupsen/logrus"
+	raven "github.com/getsentry/raven-go"
 )
 
 var hopHeaders = []string{
@@ -56,6 +57,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cConn, _, err := hj.Hijack()
 		defer cConn.Close()
 		if err != nil {
+			raven.CaptureErrorAndWait(err, nil)
 			fmt.Fprintln(w, "Error doing proxy hijack:", err)
 			return
 		}
@@ -73,6 +75,7 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var ctx = context.WithValue(r.Context(), "d", d)
 		res, err := ArrowTransport.RoundTrip(r.WithContext(ctx))
 		if err != nil {
+			raven.CaptureErrorAndWait(err, nil)
 			w.WriteHeader(http.StatusBadGateway)
 			fmt.Fprintln(w, "Error proxy request:", err)
 			return
