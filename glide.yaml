@@ -4,3 +4,4 @@ import:
 - package: github.com/ibigbug/conn-pool
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
+- package: github.com/getsentry/raven-go

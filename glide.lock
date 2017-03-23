@@ -1,16 +1,18 @@
-hash: 0f119ebe3a7a59d1e671121e5489021aa122933c28dab70891ddf85b1d518dcb
-updated: 2016-10-28T17:35:00.50964607+08:00
+hash: 40a9a7e2442d8092b47308876e83089c467630212474f9d093adbc61f9da9f2d
+updated: 2017-03-23T21:14:15.18082838+08:00
 imports:
+- name: github.com/getsentry/raven-go
+  version: b68337dbf03e7fbb53d9fd9b63fd09b28e8f13f7
 - name: github.com/ibigbug/conn-pool
-  version: 0d0016e7fd40e123d607e59222081376e49e29ca
+  version: 12a7963f39658083abdaa704d8a485a65953b149
   subpackages:
   - connpool
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
 - name: golang.org/x/sys
-  version: c200b10b5d5e122be351b67af224adc6128af5bf
+  version: 8fd966b47dbdd4faa03de0d06e3d733baeb9a1a9
   subpackages:
   - unix
 - name: gopkg.in/yaml.v2
-  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+  version: a3f3340b5840cee44f372bddb5880fcbc419b46a
 testImports: []
