@@ -30,20 +30,30 @@ password: 'abc'
 ### Server
 
 ```
-$ garrow -m server
+$ docker run -d \
+  --name garrow-server \
+  -p 9999:9999 \
+  -v $(pwd)/g-arrow.yaml:/etc/g-arrow.yaml \
+  ibigbug/garrow \
+  garrow -c /etc/g-arrow.yaml -m server
 ```
 
 ### Client
 
 ```
-$ garrow -m client
+$ docker run -d \
+  --name garrow-client \
+  -p 9998:9998 \
+  -v $(pwd)/g-arrow.yaml:/etc/g-arrow.yaml \
+  ibigbug/garrow \
+  garrow -c /etc/g-arrow.yaml -m client
 ```
 
 ## TODO
 
 * [x] make better log
 * [x] encryption
-* [ ] distribution packaging
+* [x] Docker image
 * [ ] documentation
 * [ ] relay other protocol like pure HTTP/S proxy, shadowsocks protocol etc.
 * [ ] ~~https connection reuse~~ It's impossible, since we don't know the data trasmitting and the point to release the connection.
